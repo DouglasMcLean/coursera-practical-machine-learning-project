@@ -1,7 +1,7 @@
 ---
 title: "Classifying Movement in a Weight Lifting HAR Study"
 author: "Douglas McLean, Peer Assessment, Machine Learning, Coursera"
-date: "29th January 2016"
+date: "30th January 2016"
 output: html_document
 ---
 
@@ -122,7 +122,7 @@ test_raw_timestamp_part_1 <- test$raw_timestamp_part_1 # save
 test$raw_timestamp_part_1 <- predict.kmeans(fit,test$raw_timestamp_part_1)
 test$raw_timestamp_part_1 <- as.factor(test$raw_timestamp_part_1)
 ```
-We now examine the remaining variables with histograms (omitted) to establish if there are any problem cases of repeated or missing values. Note that mean-centering and scaling is not necessary since we will be fitting a random forest model to the data. Regression trees are relatively robust to skewed data. 
+We now examine the remaining variables with histograms (omitted) to establish if there are any problem cases of repeated or missing values. Note that mean-centering and scaling is not necessary where classification trees are concerned (e.g. in gradient boosting with classification trees or with random forests) but will be necessary to scale the parameters into the range $[0,1]$ where neural networks are concerned. We note that classification trees are relatively robust to skewed data whereas other models may not be. Scaling is carried out where appropriate. 
 ```{r,echo=FALSE,eval=FALSE}
 par(mfrow=c(4,4))
 for( i in 4:(ncol(train)-1) ){
@@ -158,7 +158,7 @@ N.predictors <- ncol(train)-1
 
 We see that `r 100*(1-alpha)`% of the variability is explained by the first `r as.numeric(k)` principal components (pc's). We might reasonably recast the machine learning problem of predicting `classe` by means of using these `r as.numeric(k)` pc's but in this work we use the full set of `r N.predictors`.
 
-We now proceed to the fitting of regression trees using a stochastic gradient boosting technique.
+Next, We now proceed to the model fitting.
 
 
 
@@ -216,7 +216,7 @@ Which project a reasonable performance in out-of-sample data given the greater m
 So, to summarise, there were `r as.numeric(modFitCV$bestTune[1])` trees with interaction depths of `r as.numeric(modFitCV$bestTune[2])` and the shrinkage parameter of `r as.numeric(modFitCV$bestTune[3])`. The `Accuracy` of the CV model as `r modFitCV$results[nrow(modFitCV$results),4]` and the `Kappa`, `r modFitCV$results[nrow(modFitCV$results),5]`, were both nearly 1 indicating a good fit (the bootstrapped results were similar). We now choose to work with the cross-validated model in the next section.
 
 ## Neural Network Model
-As an alternative to the gradient boosted model with regression trees, we fit a neural network to the training dataset and use 10-fold cross validation to assess its out-of-sample performance. The `nnet` package will be used to fit a single hidden layer (i.e. a perceptron) via the `caret` package's `train` function as follows:
+As an alternative to the gradient boosted model with classification trees, we fit a neural network to the training dataset and use 10-fold cross validation to assess its out-of-sample performance. The `nnet` package will be used to fit a single hidden layer (i.e. a perceptron) via the `caret` package's `train` function as follows:
 ```{r}
 model.Fitted.nnet <- TRUE
 fileSave          <- paste(xdir,"modFitnnet_dummy.Rdat",sep="")
@@ -348,7 +348,7 @@ with summary statistics:
 ```{r}
 print(modFitnnet)
 ```
-So, the best fitting neural network (with one hidden layer) has $`r modFitnnet$finalModel$n[1]`$ input nodes, $`r modFitnnet$finalModel$n[2]`$ hidden nodes in the hidden layer and $`r modFitnnet$finalModel$n[3]`$ output nodes (one corresponding to each of `A`,...,`E`). The `Accuracy` of the neural net is `r modFitnnet$results[nrow(modFitnnet$results),3]` and the `Kappa`, `r modFitnnet$results[nrow(modFitnnet$results),4]`, were both high (close in some sense to 1) indicating a reasonable fit but not as good as the fit achieved using gradient boosting and regression trees. Nevertheless, it may be possible to achieve a better overall fit than either neural networks or gradient boosting with trees by blending the predictions of both models using, say, a random forest. The training set confusion matrix for the neural network is:
+So, the best fitting neural network (with one hidden layer) has $`r modFitnnet$finalModel$n[1]`$ input nodes, $`r modFitnnet$finalModel$n[2]`$ hidden nodes in the hidden layer and $`r modFitnnet$finalModel$n[3]`$ output nodes (one corresponding to each of `A`,...,`E`). The `Accuracy` of the neural net is `r modFitnnet$results[nrow(modFitnnet$results),3]` and the `Kappa`, `r modFitnnet$results[nrow(modFitnnet$results),4]`, were both high (close in some sense to 1) indicating a reasonable fit but not as good as the fit achieved using gradient boosting and classification trees. Nevertheless, it may be possible to achieve a better overall fit than either neural networks or gradient boosting with trees by blending the predictions of both models using, say, a random forest. The training set confusion matrix for the neural network is:
 ```{r}
 confusionMatrix.train(modFitnnet)
 ```
@@ -357,7 +357,7 @@ In conclusion, the performance of the neural network, at least as far as in-samp
 
 
 ## Blended Model
-To create a blended model of the gradient boosted-regression tree and neural network models, we split the remaining testing set in order to both train and then measure the generalization of the blended model to unseen data. Firstly, both the gradient boosted classification tree and neural network models predict on the entire testing set. This creates two new features that will be used to build a model. A new data-frame in three variables is created from these two features and the true `classe` outcome present in the testing set. This new dataset is then partitioned into two halves and the first is used to train the blended model. This is chosen to be a random forest model. The second half of the new data-frame is then used to quantify the out-of-sample performance of the blended model.
+To create a blended model of the gradient boosted-classification tree and neural network models, we split the remaining testing set in order to both train and then measure the generalization of the blended model to unseen data. Firstly, both the gradient boosted classification tree and neural network models predict on the entire testing set. This creates two new features that will be used to build a model. A new data-frame in three variables is created from these two features and the true `classe` outcome present in the testing set. This new dataset is then partitioned into two halves and the first is used to train the blended model. This is chosen to be a random forest model. The second half of the new data-frame is then used to quantify the out-of-sample performance of the blended model.
 
 
 We now predict the models on the remaining `testing` dataset:
@@ -417,9 +417,7 @@ inTrain.blend       <- createDataPartition(y=testing$classe, p=0.5, list=FALSE)
 blending.data.train <- blending.data[ inTrain.blend,]
 blending.data.test  <- blending.data[-inTrain.blend,]
 ```
-The dimension of each is roughly an equal split. For the training set: $`r dim(blending.data.train)`$; and for the testing: $`r dim(blending.data.test)`$. We now fit a random forest to the training partition.
-
-Before fitting the blended model, we can quantify how the gradient boosted classification tree and neural net models perform relative to one-another using summaries and following cross-tabulation:
+The dimension of each is roughly an equal split. For the training set: $`r dim(blending.data.train)`$; and for the testing: $`r dim(blending.data.test)`$. Before we fit a random forest to the training partition for the blended model, we can quantify how the gradient boosted classification tree and neural net models perform relative to one-another using summaries and following cross-tabulation:
 ```{r}
 summary(as.factor(predict.nnet.blend))
 summary(as.factor(predict.gbm.blend ))
